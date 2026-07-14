@@ -4,7 +4,7 @@ import requests
 
 from sglang.lang.chat_template import get_chat_template_by_model_path
 from sglang.srt.environ import envs
-from sglang.srt.utils import kill_process_tree
+from sglang.srt.utils import is_xpu, kill_process_tree
 from sglang.test.ci.ci_register import register_amd_ci, register_cuda_ci
 from sglang.test.kits.ebnf_constrained_kit import EBNFConstrainedMixin
 from sglang.test.kits.eval_accuracy_kit import GSM8KMixin
@@ -20,6 +20,7 @@ from sglang.test.test_utils import (
     DEFAULT_URL_FOR_TEST,
     CustomTestCase,
     is_in_amd_ci,
+    is_in_ci,
     popen_launch_server,
 )
 
@@ -39,7 +40,12 @@ class TestDPAttentionDP2TP2(
 
     @classmethod
     def setUpClass(cls):
-        cls.model = DEFAULT_MODEL_NAME_FOR_TEST_MLA
+        # Use DeepSeek-Coder-V2-Lite on XPU
+        if is_xpu():
+            cls.model = DEFAULT_MLA_MODEL_NAME_FOR_TEST  # deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct
+        else:
+            cls.model = DEFAULT_MODEL_NAME_FOR_TEST_MLA
+            
         cls.base_url = DEFAULT_URL_FOR_TEST
         cls._env_override = envs.SGLANG_DISABLE_CONSECUTIVE_PREFILL_OVERLAP.override(
             True
@@ -77,10 +83,17 @@ class TestDPAttentionGatherv(
     the change is a pure communication reorg, not a numerics change."""
 
     gsm8k_accuracy_thres = 0.6
+    gsm8k_num_threads = 4  # ← ADD THIS LINE (lower from default 128 to avoid XCCL hang)
+
 
     @classmethod
     def setUpClass(cls):
-        cls.model = DEFAULT_TARGET_MODEL_EAGLE_DP_ATTN
+        # Use DeepSeek-Coder-V2-Lite on XPU
+        cls.model = (
+            DEFAULT_MLA_MODEL_NAME_FOR_TEST
+            if is_xpu()
+            else DEFAULT_TARGET_MODEL_EAGLE_DP_ATTN
+        )
         cls.base_url = DEFAULT_URL_FOR_TEST
         cls.process = popen_launch_server(
             cls.model,
@@ -226,3 +239,5 @@ class TestDPAttentionDP2TP2VLM(CustomTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
